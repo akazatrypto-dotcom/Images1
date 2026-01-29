@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SparkBot - Telegram Mini App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #050505;
+            --card: #121212;
+            --border: #1f1f1f;
+            --text: #ffffff;
+            --text-muted: #a1a1aa;
+            --accent: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.3);
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+        .page-container {
+            height: calc(100vh - 80px);
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+            padding: 8px 10px 40px 10px;
+        }
+        .modern-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 12px;
+            margin-bottom: 8px;
+            transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .modern-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+        }
+        .modern-card:hover {
+            border-color: var(--accent);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px -10px var(--accent-glow);
+        }
+        .modern-card:active {
+            transform: scale(0.98);
+            background: #181818;
+        }
+        .page {
+            display: none;
+            max-width: 480px;
+            margin: 0 auto;
+            opacity: 0;
+            transform: translateY(20px) scale(0.98);
+            transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+        }
+        .page.active {
+            display: block;
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+        .nav-container {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(18, 18, 18, 0.8);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            height: 70px;
+            border-radius: 35px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            z-index: 100;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+        }
+        .nav-btn {
+            color: var(--text-muted);
+            transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            position: relative;
+            gap: 4px;
+        }
+        .nav-btn.active {
+            color: var(--accent);
+        }
+        .nav-btn.active i {
+            transform: translateY(-4px);
+        }
+        .nav-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: 12px;
+            width: 6px;
+            height: 6px;
+            background: var(--accent);
+            border-radius: 50%;
+            box-shadow: 0 0 15px var(--accent);
+            animation: dot-glow 2s infinite ease-in-out;
+        }
+        @keyframes dot-glow {
+            0%, 100% { opacity: 0.5; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+        .profile-gradient {
+            background: linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%);
+            position: relative;
+            border: 1px solid rgba(255,255,255,0.05) !important;
+        }
+        .profile-avatar-ring {
+            padding: 4px;
+            background: linear-gradient(135deg, var(--accent), #8b5cf6);
+            border-radius: 50%;
+            box-shadow: 0 0 30px rgba(59, 130, 246, 0.5);
+            animation: ring-pulse 3s infinite ease-in-out;
+        }
+        @keyframes ring-pulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.4); }
+            50% { box-shadow: 0 0 40px rgba(59, 130, 246, 0.7); }
+        }
+        input, textarea, select {
+            background: rgba(10, 10, 10, 0.8) !important;
+            border: 1px solid var(--border) !important;
+            color: white !important;
+            border-radius: 14px !important;
+            padding: 14px 18px !important;
+            width: 100%;
+            outline: none;
+            font-size: 15px;
+            transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+        }
+        input:focus {
+            border-color: var(--accent) !important;
+            box-shadow: 0 0 0 2px var(--accent-glow);
+            transform: scale(1.01);
+        }
+        button {
+            border-radius: 14px !important;
+            font-weight: 600 !important;
+            transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+            font-size: 15px;
+        }
+        button:active { transform: scale(0.95); }
+        .btn-white { background: #ffffff; color: #000000; box-shadow: 0 4px 20px rgba(255,255,255,0.15); }
+        .btn-accent { background: var(--accent); color: white; box-shadow: 0 4px 20px var(--accent-glow); }
+        .btn-outline { border: 1px solid var(--border); background: rgba(255,255,255,0.03); color: white; }
+        .lucide { width: 22px; height: 22px; stroke-width: 2px; }
+        .page-container::-webkit-scrollbar { display: none; }
+        @keyframes fade-in {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in { animation: fade-in 0.4s ease-out forwards; }
+
+        /* Wheel of Fortune CSS */
+        .wheel-container {
+            position: relative;
+            width: 280px;
+            height: 280px;
+            margin: 20px auto;
+        }
+        #wheel {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 5px solid var(--border);
+            position: relative;
+            overflow: hidden;
+            transition: transform 4s cubic-bezier(0.15, 0, 0.15, 1);
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+        }
+        .wheel-pointer {
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 30px;
+            height: 30px;
+            background: white;
+            clip-path: polygon(50% 100%, 0 0, 100% 0);
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="page-container" id="main-scroll">
+        <!-- Profile Page -->
+        <div id="page-user" class="page active">
+            <div class="flex items-center justify-between mb-8">
+                <h1 class="text-3xl font-bold tracking-tight">Profile</h1>
+                <button onclick="switchTab('notifications')" class="relative p-2.5 bg-zinc-900/50 border border-zinc-800 rounded-full text-text-muted">
+                    <i data-lucide="bell"></i>
+                </button>
+            </div>
+
+            <div class="modern-card profile-gradient p-6 mb-4 text-center">
+                <div class="flex flex-col items-center">
+                    <div class="profile-avatar-ring mb-3">
+                        <img id="user-photo" src="https://via.placeholder.com/120" class="w-16 h-16 rounded-full border-2 border-black">
+                    </div>
+                    <h2 id="user-name" class="text-xl font-bold mb-0.5">Guest User</h2>
+                    <p id="user-username" class="text-accent text-xs font-medium">@guest</p>
+                </div>
+            </div>
+
+            <div class="space-y-4 mb-4">
+                <div class="modern-card flex justify-between items-center p-4">
+                    <div class="flex items-center gap-4">
+                        <i data-lucide="hash" class="text-orange-500"></i>
+                        <div>
+                            <p class="text-[10px] uppercase text-text-muted">Telegram ID</p>
+                            <p id="info-id" class="text-sm font-semibold font-mono">00000000</p>
+                        </div>
+                    </div>
+                    <button onclick="copyText('info-id')" class="p-2 bg-zinc-900/50 rounded-lg"><i data-lucide="copy" class="w-4 h-4"></i></button>
+                </div>
+            </div>
+
+            <div id="admin-btn-container" class="text-center pb-8 hidden">
+                <button onclick="switchTab('admin')" class="px-6 py-2 rounded-full text-[10px] text-text-muted border border-zinc-800 uppercase tracking-widest">Control Panel</button>
+            </div>
+        </div>
+
+        <!-- Services Page -->
+        <div id="page-services" class="page">
+            <h1 class="text-2xl font-bold mb-6">Services</h1>
+            <div class="grid grid-cols-1 gap-4 pb-8">
+                
+                <!-- Crypto Search -->
+                <div class="modern-card">
+                    <div class="flex items-center gap-2 mb-4">
+                        <i data-lucide="search" class="text-orange-500"></i>
+                        <h3 class="text-sm font-bold uppercase">Crypto Search</h3>
+                    </div>
+                    <div class="flex gap-2 mb-4">
+                        <input type="text" id="crypto-input" placeholder="e.g. bitcoin, ethereum">
+                        <button onclick="searchCrypto()" id="crypto-btn" class="px-6 btn-white">Search</button>
+                    </div>
+                    <div id="crypto-result" class="hidden animate-fade-in">
+                        <div class="flex items-center gap-4 mb-4">
+                            <img id="coin-img" src="" class="w-12 h-12">
+                            <div>
+                                <h4 id="coin-name" class="font-bold">Name</h4>
+                                <p id="coin-symbol" class="text-xs text-text-muted uppercase">SYM</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="bg-black/20 p-2 rounded">Price: <span id="coin-price" class="font-mono"></span></div>
+                            <div class="bg-black/20 p-2 rounded">24h: <span id="coin-change" class="font-mono"></span></div>
+                            <div class="bg-black/20 p-2 rounded">M.Cap: <span id="coin-mcap" class="font-mono"></span></div>
+                            <div class="bg-black/20 p-2 rounded">Supply: <span id="coin-supply" class="font-mono"></span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Timer -->
+                <div class="modern-card">
+                    <div class="flex items-center gap-2 mb-4">
+                        <i data-lucide="timer" class="text-blue-500"></i>
+                        <h3 class="text-sm font-bold uppercase">Precision Timer</h3>
+                    </div>
+                    <div class="text-center py-4">
+                        <div id="timer-display" class="text-4xl font-mono font-bold mb-6">00:00:00.<span class="text-xl text-text-muted">00</span></div>
+                        <div class="flex gap-2">
+                            <button onclick="startTimer()" id="timer-start" class="flex-1 py-3 btn-accent">Start</button>
+                            <button onclick="stopTimer()" id="timer-stop" class="flex-1 py-3 btn-outline hidden">Stop</button>
+                            <button onclick="resetTimer()" class="px-4 py-3 btn-outline">Reset</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Username Generator -->
+                <div class="modern-card">
+                    <div class="flex items-center gap-2 mb-4">
+                        <i data-lucide="user-plus" class="text-emerald-500"></i>
+                        <h3 class="text-sm font-bold uppercase">Username Gen</h3>
+                    </div>
+                    <div class="space-y-3">
+                        <select id="user-gen-cat" class="text-xs">
+                            <option value="crypto">Crypto</option>
+                            <option value="trading">Trading</option>
+                            <option value="general">General</option>
+                        </select>
+                        <div class="flex gap-2">
+                            <input type="text" id="user-gen-res" readonly placeholder="Generated Username" class="font-mono text-xs">
+                            <button onclick="genUsername()" class="px-4 btn-white">Gen</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Password Strength Checker -->
+                <div class="modern-card">
+                    <div class="flex items-center gap-2 mb-4">
+                        <i data-lucide="shield-check" class="text-purple-500"></i>
+                        <h3 class="text-sm font-bold uppercase">Pass Strength</h3>
+                    </div>
+                    <div class="space-y-3">
+                        <input type="password" id="strength-input" placeholder="Type password..." oninput="checkStrength()">
+                        <div id="strength-res" class="p-3 rounded-xl bg-black/20 hidden">
+                            <p id="strength-level" class="font-bold text-sm mb-1"></p>
+                            <p id="strength-desc" class="text-[10px] text-text-muted"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Random Number Generator -->
+                <div class="modern-card">
+                    <div class="flex items-center gap-2 mb-4">
+                        <i data-lucide="hash" class="text-amber-500"></i>
+                        <h3 class="text-sm font-bold uppercase">Random Number</h3>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 mb-3">
+                        <input type="number" id="rand-min" placeholder="Min" value="1" class="text-xs">
+                        <input type="number" id="rand-max" placeholder="Max" value="100" class="text-xs">
+                    </div>
+                    <input type="number" id="rand-count" placeholder="Count" value="1" class="mb-3 text-xs">
+                    <button onclick="genRandomNumbers()" class="w-full py-3 btn-white mb-3">Generate</button>
+                    <div id="rand-res" class="text-center font-mono text-xs p-3 bg-black/20 rounded-xl hidden"></div>
+                </div>
+
+                <!-- Percentage Calculator -->
+                <div class="modern-card">
+                    <div class="flex items-center gap-2 mb-4">
+                        <i data-lucide="percent" class="text-rose-500"></i>
+                        <h3 class="text-sm font-bold uppercase">Percent Calc</h3>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="flex gap-2 items-center text-xs">
+                            <span>What is</span>
+                            <input type="number" id="perc-p" class="w-20" placeholder="%">
+                            <span>of</span>
+                            <input type="number" id="perc-n" class="flex-1" placeholder="Num">
+                        </div>
+                        <button onclick="calcPercent()" class="w-full py-2 btn-white text-xs">Calculate</button>
+                        <div id="perc-res" class="text-center font-bold text-sm hidden"></div>
+                    </div>
+                </div>
+
+                <!-- Translation Service -->
+                <div class="modern-card">
+                    <div class="flex items-center gap-2 mb-4">
+                        <i data-lucide="languages" class="text-blue-400"></i>
+                        <h3 class="text-sm font-bold uppercase">Translate</h3>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="flex gap-2">
+                            <select id="trans-from" class="text-[10px] w-24">
+                                <option value="en">English</option>
+                                <option value="hi">Hindi</option>
+                                <option value="ar">Arabic</option>
+                            </select>
+                            <select id="trans-to" class="text-[10px] flex-1">
+                                <option value="hi">Hindi</option>
+                                <option value="en">English</option>
+                                <option value="ar">Arabic</option>
+                            </select>
+                        </div>
+                        <textarea id="trans-input" rows="2" placeholder="Text to translate..." class="text-xs"></textarea>
+                        <button onclick="translateText()" id="trans-btn" class="w-full py-3 btn-white">Translate</button>
+                        <div id="trans-res" class="p-3 bg-black/20 rounded-xl text-xs hidden italic"></div>
+                    </div>
+                </div>
+
+                <!-- Wheel of Fortune -->
+                <div class="modern-card">
+                    <div class="flex items-center gap-2 mb-4">
+                        <i data-lucide="disc" class="text-yellow-500"></i>
+                        <h3 class="text-sm font-bold uppercase">Wheel of Fortune</h3>
+                    </div>
+                    <div class="space-y-4">
+                        <textarea id="wheel-names" rows="2" placeholder="Names (comma separated)..." class="text-xs"></textarea>
+                        <button onclick="setupWheel()" class="w-full py-2 btn-outline text-xs">Set Participants</button>
+                        <div id="wheel-box" class="hidden">
+                            <div class="wheel-container">
+                                <div class="wheel-pointer"></div>
+                                <canvas id="wheel" width="500" height="500"></canvas>
+                            </div>
+                            <button onclick="spinWheel()" id="spin-btn" class="w-full py-4 btn-accent font-bold">SPIN</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Admin Page -->
+        <div id="page-admin" class="page">
+            <h1 class="text-2xl font-bold mb-6 text-center">Admin</h1>
+            <div id="admin-login-screen" class="modern-card p-8">
+                <input type="password" id="admin-pass" placeholder="Password" class="mb-4 text-center">
+                <button onclick="loginAdmin()" class="w-full py-3 btn-white">Authorize</button>
+            </div>
+            <div id="admin-dashboard" class="hidden space-y-6">
+                <div class="modern-card p-4">
+                    <h3 class="text-sm font-bold mb-4">Supabase Config</h3>
+                    <input type="text" id="sb-url" placeholder="URL" class="mb-2 text-xs">
+                    <input type="password" id="sb-key" placeholder="Key" class="mb-4 text-xs">
+                    <button onclick="saveSupabaseConfig()" class="w-full py-2 btn-accent">Connect</button>
+                    <p id="sb-status" class="text-[10px] mt-2 text-center"></p>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="modern-card text-center p-4">
+                        <p class="text-[10px] text-text-muted">Users</p>
+                        <p id="stat-users" class="text-xl font-bold">0</p>
+                    </div>
+                    <div class="modern-card text-center p-4">
+                        <p class="text-[10px] text-text-muted">Earnings</p>
+                        <p id="stat-earnings" class="text-xl font-bold text-emerald-500">$0.00</p>
+                    </div>
+                </div>
+                <div class="modern-card p-4">
+                    <h3 class="text-sm font-bold mb-4">Broadcast</h3>
+                    <textarea id="broadcast-msg" rows="3" class="mb-4 text-sm" placeholder="Message..."></textarea>
+                    <button onclick="sendBroadcast()" class="w-full py-3 btn-white">Send Broadcast</button>
+                </div>
+                <button onclick="logoutAdmin()" class="w-full py-2 btn-outline text-xs">Logout</button>
+            </div>
+        </div>
+
+        <!-- Notifications -->
+        <div id="page-notifications" class="page">
+            <div class="flex items-center gap-4 mb-6">
+                <button onclick="switchTab('user')" class="p-2 bg-zinc-900 rounded-full"><i data-lucide="arrow-left"></i></button>
+                <h1 class="text-2xl font-bold">Updates</h1>
+            </div>
+            <div class="modern-card text-center italic text-text-muted p-8">No new updates.</div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <div class="nav-container">
+        <button onclick="switchTab('user')" class="nav-btn active"><i data-lucide="user"></i><span class="text-[10px]">Home</span></button>
+        <button onclick="switchTab('services')" class="nav-btn"><i data-lucide="grid"></i><span class="text-[10px]">Services</span></button>
+        <button onclick="switchTab('admin')" class="nav-btn hidden" id="nav-admin-btn"><i data-lucide="settings"></i><span class="text-[10px]">Admin</span></button>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        const ADMIN_ID = 7812317222;
+        let supabaseClient = null; // Renamed to avoid conflict
+        let timerInterval = null;
+        let timerSeconds = 0;
+
+        // Display welcome message when app loads
+        window.onload = () => {
+            const user = tg.initDataUnsafe?.user;
+            if (user) {
+                document.getElementById('user-name').innerText = user.first_name;
+                document.getElementById('info-id').innerText = user.id;
+                // Admin button visibility
+                if (user.id === ADMIN_ID) {
+                    document.getElementById('admin-btn-container').classList.remove('hidden');
+                    document.getElementById('nav-admin-btn').classList.remove('hidden');
+                }
+            }
+            lucide.createIcons();
+            tg.ready();
+            
+            // Show welcome message on first load
+            tg.showAlert("Welcome to SparkBot 👋\nHere you can enjoy several services you need in your daily life for a small fee 🔥\nWhat are you waiting for? Join now and enjoy our services! 😌");
+        };
+
+        async function saveSupabaseConfig() {
+            const url = document.getElementById('sb-url').value;
+            const key = document.getElementById('sb-key').value;
+            const status = document.getElementById('sb-status');
+            try {
+                supabaseClient = window.supabase.createClient(url, key);
+                const { error } = await supabaseClient.from('users').select('*', { count: 'exact', head: true });
+                if (error) throw error;
+                status.innerText = "Connected!";
+                status.className = "text-[10px] mt-2 text-center text-green-500";
+                updateStats();
+            } catch (err) {
+                status.innerText = "Error: " + err.message;
+                status.className = "text-[10px] mt-2 text-center text-red-500";
+            }
+        }
+
+        async function updateStats() {
+            if (!supabaseClient) return;
+            const { count: uCount } = await supabaseClient.from('users').select('*', { count: 'exact', head: true });
+            const { count: cCount } = await supabaseClient.from('activation_codes').select('*', { count: 'exact', head: true, filter: 'used_at.not.is.null' });
+            document.getElementById('stat-users').innerText = uCount || 0;
+            document.getElementById('stat-earnings').innerText = `$${((cCount || 0) * 0.3).toFixed(2)}`;
+        }
+
+        async function sendBroadcast() {
+            const msg = document.getElementById('broadcast-msg').value;
+            if (!msg) return;
+            alert("Broadcast sent: " + msg);
+            document.getElementById('broadcast-msg').value = '';
+        }
+
+        async function searchCrypto() {
+            const input = document.getElementById('crypto-input').value.toLowerCase().trim();
+            const btn = document.getElementById('crypto-btn');
+            if (!input) return;
+            btn.innerText = "Wait...";
+            try {
+                const res = await fetch(`https://api.coingecko.com/api/v3/coins/${input}`);
+                const data = await res.json();
+                if (!data || data.error) throw new Error("Not found");
+                document.getElementById('coin-img').src = data.image.small;
+                document.getElementById('coin-name').innerText = data.name;
+                document.getElementById('coin-symbol').innerText = data.symbol;
+                document.getElementById('coin-price').innerText = `$${data.market_data.current_price.usd.toLocaleString()}`;
+                const change = data.market_data.price_change_percentage_24h || 0;
+                document.getElementById('coin-change').innerText = `${change.toFixed(2)}%`;
+                document.getElementById('coin-change').className = change >= 0 ? "text-green-500" : "text-red-500";
+                document.getElementById('coin-mcap').innerText = `$${data.market_data.market_cap.usd.toLocaleString()}`;
+                document.getElementById('coin-supply').innerText = data.market_data.total_supply?.toLocaleString() || "N/A";
+                document.getElementById('crypto-result').classList.remove('hidden');
+                tg.HapticFeedback.impactOccurred('medium');
+            } catch (err) { alert(err.message); }
+            btn.innerText = "Search";
+        }
+
+        // Username Gen
+        function genUsername() {
+            const cat = document.getElementById('user-gen-cat').value;
+            const prefixes = {
+                crypto: ['Crypto', 'Satoshi', 'Hodl', 'Moon', 'Coin'],
+                trading: ['Trader', 'Profit', 'Bull', 'Bear', 'Alpha'],
+                general: ['Spark', 'Pro', 'Neo', 'Max', 'Ultra']
+            };
+            const suffixes = ['Master', 'Hub', 'Nexus', 'X', 'Warrior', 'Sage'];
+            const res = prefixes[cat][Math.floor(Math.random() * 5)] + suffixes[Math.floor(Math.random() * 6)] + Math.floor(Math.random()*100);
+            document.getElementById('user-gen-res').value = res;
+        }
+
+        // Pass Strength
+        function checkStrength() {
+            const p = document.getElementById('strength-input').value;
+            const resBox = document.getElementById('strength-res');
+            const level = document.getElementById('strength-level');
+            const desc = document.getElementById('strength-desc');
+            if (!p) { resBox.classList.add('hidden'); return; }
+            resBox.classList.remove('hidden');
+            let score = 0;
+            if (p.length > 8) score++;
+            if (/[A-Z]/.test(p)) score++;
+            if (/[0-9]/.test(p)) score++;
+            if (/[^A-Za-z0-9]/.test(p)) score++;
+
+            if (score <= 1) { level.innerText = "Weak"; level.className = "font-bold text-sm mb-1 text-red-500"; desc.innerText = "Use more characters and special symbols."; }
+            else if (score <= 3) { level.innerText = "Medium"; level.className = "font-bold text-sm mb-1 text-yellow-500"; desc.innerText = "Good, but could be stronger."; }
+            else { level.innerText = "Strong"; level.className = "font-bold text-sm mb-1 text-green-500"; desc.innerText = "Excellent security."; }
+        }
+
+        // Random Number
+        function genRandomNumbers() {
+            const min = parseInt(document.getElementById('rand-min').value);
+            const max = parseInt(document.getElementById('rand-max').value);
+            const count = parseInt(document.getElementById('rand-count').value);
+            const res = document.getElementById('rand-res');
+            let nums = [];
+            for(let i=0; i<count; i++) nums.push(Math.floor(Math.random() * (max - min + 1)) + min);
+            res.innerText = nums.join(', ');
+            res.classList.remove('hidden');
+        }
+
+        // Percent
+        function calcPercent() {
+            const p = parseFloat(document.getElementById('perc-p').value);
+            const n = parseFloat(document.getElementById('perc-n').value);
+            const res = document.getElementById('perc-res');
+            if (isNaN(p) || isNaN(n)) return;
+            res.innerText = `Result: ${(p / 100) * n}`;
+            res.classList.remove('hidden');
+        }
+
+        // Translate
+        async function translateText() {
+            const text = document.getElementById('trans-input').value;
+            const from = document.getElementById('trans-from').value;
+            const to = document.getElementById('trans-to').value;
+            const btn = document.getElementById('trans-btn');
+            const resBox = document.getElementById('trans-res');
+            if (!text) return;
+            btn.innerText = "Translating...";
+            try {
+                const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${from}|${to}`);
+                const data = await res.json();
+                resBox.innerText = data.responseData.translatedText;
+                resBox.classList.remove('hidden');
+            } catch(e) { alert("Translation failed"); }
+            btn.innerText = "Translate";
+        }
+
+        // Wheel Logic
+        let names = [];
+        let colors = [];
+        let startAngle = 0;
+        let arc = 0;
+        let spinTimeout = null;
+        let spinAngleStart = 10;
+        let spinTime = 0;
+        let spinTimeTotal = 0;
+
+        function setupWheel() {
+            const raw = document.getElementById('wheel-names').value;
+            names = raw.split(',').map(n => n.trim()).filter(n => n);
+            if (names.length < 2) {
+                tg.showAlert("Please enter at least 2 participants separated by commas.");
+                return;
+            }
+            document.getElementById('wheel-box').classList.remove('hidden');
+            colors = names.map((_, i) => `hsl(${(i * 360) / names.length}, 70%, 50%)`);
+            arc = Math.PI / (names.length / 2);
+            drawWheel();
+            tg.HapticFeedback.impactOccurred('medium');
+        }
+
+        function drawWheel() {
+            const canvas = document.getElementById('wheel');
+            if (!canvas.getContext) return;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, 500, 500);
+            
+            const outsideRadius = 240;
+            const textRadius = 180;
+            const insideRadius = 0;
+
+            names.forEach((name, i) => {
+                const angle = startAngle + i * arc;
+                ctx.fillStyle = colors[i];
+                ctx.beginPath();
+                ctx.arc(250, 250, outsideRadius, angle, angle + arc, false);
+                ctx.arc(250, 250, insideRadius, angle + arc, angle, true);
+                ctx.fill();
+
+                ctx.save();
+                ctx.fillStyle = "white";
+                ctx.translate(250 + Math.cos(angle + arc / 2) * textRadius, 250 + Math.sin(angle + arc / 2) * textRadius);
+                ctx.rotate(angle + arc / 2 + Math.PI / 2);
+                ctx.textAlign = "center";
+                ctx.font = "bold 22px Inter";
+                ctx.fillText(name, 0, 0);
+                ctx.restore();
+            });
+        }
+
+        function rotateWheel() {
+            spinTime += 30;
+            if (spinTime >= spinTimeTotal) {
+                stopRotation();
+                return;
+            }
+            const spinAngle = spinAngleStart - easeOut(spinTime, 0, spinAngleStart, spinTimeTotal);
+            startAngle += (spinAngle * Math.PI) / 180;
+            drawWheel();
+            spinTimeout = setTimeout(rotateWheel, 30);
+        }
+
+        function stopRotation() {
+            clearTimeout(spinTimeout);
+            const degrees = (startAngle * 180) / Math.PI + 90;
+            const arcd = (arc * 180) / Math.PI;
+            const index = Math.floor((360 - (degrees % 360)) / arcd) % names.length;
+            const winner = names[index];
+            tg.showAlert(`🎉 Winner: ${winner}!`);
+            tg.HapticFeedback.notificationOccurred('success');
+        }
+
+        function easeOut(t, b, c, d) {
+            const ts = (t /= d) * t;
+            const tc = ts * t;
+            return b + c * (tc + -3 * ts + 3 * t);
+        }
+
+        function spinWheel() {
+            spinAngleStart = Math.random() * 10 + 10;
+            spinTime = 0;
+            spinTimeTotal = Math.random() * 3 + 4 * 1000;
+            rotateWheel();
+            tg.HapticFeedback.impactOccurred('heavy');
+        }
+
+        function startTimer() {
+            document.getElementById('timer-start').classList.add('hidden');
+            document.getElementById('timer-stop').classList.remove('hidden');
+            const start = Date.now() - (timerSeconds * 1000);
+            timerInterval = setInterval(() => {
+                timerSeconds = (Date.now() - start) / 1000;
+                updateTimerDisplay();
+            }, 10);
+            tg.HapticFeedback.impactOccurred('light');
+        }
+
+        function stopTimer() {
+            document.getElementById('timer-stop').classList.add('hidden');
+            document.getElementById('timer-start').classList.remove('hidden');
+            clearInterval(timerInterval);
+        }
+
+        function resetTimer() {
+            stopTimer();
+            timerSeconds = 0;
+            updateTimerDisplay();
+        }
+
+        function updateTimerDisplay() {
+            const h = Math.floor(timerSeconds / 3600);
+            const m = Math.floor((timerSeconds % 3600) / 60);
+            const s = Math.floor(timerSeconds % 60);
+            const ms = Math.floor((timerSeconds % 1) * 100);
+            document.getElementById('timer-display').innerHTML = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.<span class="text-xl text-text-muted">${ms.toString().padStart(2, '0')}</span>`;
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            const target = document.getElementById('page-' + tabId);
+            if (target) target.classList.add('active');
+            const btn = document.querySelector(`[onclick="switchTab('${tabId}')"]`);
+            if (btn) btn.classList.add('active');
+            if (tabId === 'admin') {
+                const user = tg.initDataUnsafe?.user;
+                if (user?.id === ADMIN_ID) {
+                    document.getElementById('admin-login-screen').classList.add('hidden');
+                    document.getElementById('admin-dashboard').classList.remove('hidden');
+                }
+            }
+            tg.HapticFeedback.impactOccurred('light');
+        }
+
+        function loginAdmin() {
+            if (document.getElementById('admin-pass').value === "admin123") {
+                document.getElementById('admin-login-screen').classList.add('hidden');
+                document.getElementById('admin-dashboard').classList.remove('hidden');
+                tg.HapticFeedback.notificationOccurred('success');
+            } else {
+                alert("Invalid password");
+            }
+        }
+
+        function logoutAdmin() {
+            document.getElementById('admin-login-screen').classList.remove('hidden');
+            document.getElementById('admin-dashboard').classList.add('hidden');
+            switchTab('user');
+        }
+
+        function copyText(id) {
+            const text = document.getElementById(id).innerText;
+            navigator.clipboard.writeText(text);
+            tg.HapticFeedback.notificationOccurred('success');
+        }
+    </script>
+</body>
+</html>
